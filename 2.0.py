@@ -6,12 +6,12 @@ from PIL import Image
 from PIL import ImageChops
 from matplotlib import pyplot as plt
 
-
+# 多次测试
 image1 = cv.imread('./sample/in000113.jpg')
-image1 = cv.resize(image1, (960, 540))
+image1 = cv.resize(image1, (320, 320))
 # image1 = cv.cvtColor(image1, cv.COLOR_BGR2GRAY)
 image2 = cv.imread('./sample/in000113_A.jpg')
-image2 = cv.resize(image2, (960, 540))
+image2 = cv.resize(image2, (320, 320))
 
 # image2 = cv.cvtColor(image2, cv.COLOR_BGR2GRAY)
 [height, width, channels] = image1.shape
@@ -74,14 +74,14 @@ def deEdge(img, xthresh=1.0, ythresh=1.0):
 
 
 # Remove little block
-# thresh = diff
-# thresh = deEdge(diff, xthresh=0.2, ythresh=0.2)
 image1_thresh = deEdge(image1, xthresh=0.2, ythresh=0.2)
 cv.imshow("Image 1 deEdge", image1_thresh)
+image1_thresh = image1
 
 
 kernel = cv.getStructuringElement(cv.MORPH_RECT, (3, 3))
-image1_thresh = cv.morphologyEx(image1_thresh, cv.MORPH_CLOSE, kernel, iterations=1)
+image1_thresh = cv.morphologyEx(image1_thresh, cv.MORPH_OPEN, kernel, iterations=1)
+
 cv.imshow("Image 1 morphology", image1_thresh)
 
 size = int(height*0.014) + (int(height*0.014) - 1) % 2
@@ -91,8 +91,10 @@ cv.imshow("Image 1 gaussianBlur", image1_thresh)
 
 image2_thresh = deEdge(image2, xthresh=0.2, ythresh=0.2)
 cv.imshow("Image 2 deEdge", image2_thresh)
+image2_thresh = image2
 
-image2_thresh = cv.morphologyEx(image2_thresh, cv.MORPH_CLOSE, kernel, iterations=1)
+image2_thresh = cv.morphologyEx(image2_thresh, cv.MORPH_OPEN, kernel, iterations=1)
+
 cv.imshow("Image 2 morphology", image2_thresh)
 
 image2_thresh = cv.GaussianBlur(image2_thresh, (size, size), 0)
@@ -101,19 +103,44 @@ cv.imshow("Image 2 gaussianBlur", image2_thresh)
 
 diff = colorDiff(image1_thresh, image2_thresh)
 cv.imshow("Image difference", diff)
-diff2 = cv.subtract(image1_thresh, image2_thresh)
-cv.imshow("DIFFERENCE", diff2)
+# diff2 = cv.subtract(image1_thresh, image2_thresh)
+# cv.imshow("DIFFERENCE", diff2)
 # diff.astype(np.uint8)
 diff = diff.astype(np.uint8)
-# value, thresh = cv.threshold(diff, 10, 255,  cv.THRESH_OTSU | cv.THRESH_TOZERO)
+cv.imshow("Uint8", diff)
+# diff = cv.GaussianBlur(diff, (size, size), 0)
+# cv.imshow("Diff gaussianBlur", diff)
+# value, thresh = cv.threshold(diff, 30, 255, cv.THRESH_TRIANGLE | cv.THRESH_TOZERO_INV)
+thresh = cv.adaptiveThreshold(diff, 255, cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY_INV, 3, 2.5)  # C can be adaptive
+cv.imshow("Threshold", thresh)
+# print(value)
 
 
-cnts = cv.findContours(diff, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+cnts = cv.findContours(thresh, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
 cnts = cnts[1] if imutils.is_cv3() else cnts[0]
 print(len(cnts))
 
 blank = np.zeros([int(height), int(width), 3], np.uint8)
-edgeThresh = 0.04
+edgeThresh = 0.03
+# i = 0
+# adaptive by cnts
+for c in cnts:
+    x, y, w, h = cv.boundingRect(c)
+    # print(x, y, w, h)
+    # if w > 0.005 * width and h > 0.005 * height:
+    x1 = x
+    y1 = y
+    x2 = x + w
+    y2 = y + h
+    cv.rectangle(blank, (x1, y1), (x2, y2), (0, 0, 255), thickness=0)  # -1 - 3
+
+cv.imshow("Blank", blank)
+
+
+blank2 = cv.cvtColor(blank, cv.COLOR_BGR2GRAY)
+blank = np.zeros([int(height), int(width), 3], np.uint8)
+cnts = cv.findContours(blank2, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+cnts = cnts[1] if imutils.is_cv3() else cnts[0]
 # i = 0
 for c in cnts:
     x, y, w, h = cv.boundingRect(c)
@@ -123,122 +150,22 @@ for c in cnts:
         y1 = y
         x2 = x + w
         y2 = y + h
-        cv.rectangle(blank, (x1, y1), (x2, y2), (0, 0, 255), 2)
+        cv.rectangle(blank, (x1, y1), (x2, y2), (0, 0, 255), 0)
 
-cv.imshow("Blank", blank)
-
+cv.imshow("Blank2", blank)
+print(blank.shape)
 
 blank2 = cv.cvtColor(blank, cv.COLOR_BGR2GRAY)
 cnts = cv.findContours(blank2, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
 cnts = cnts[1] if imutils.is_cv3() else cnts[0]
-print(len(cnts))
+print("len of cnts: ", len(cnts))
 for c in cnts:
     x, y, w, h = cv.boundingRect(c)
-    if w > 0.08 * width and h > 0.08 * height:
+    if w > 0.06 * width and h > 0.06 * height:
         print("True ", x, y, x + w, y + h)
         cv.rectangle(image1, (x, y), (x + w, y + h), (0, 0, 255), 2)
 
 cv.imshow("Final", image1)
 # print("I:{}".format(i))
 
-# diff = cv.subtract(image1_thresh, image2_thresh)
-# diff[diff < 0] = 0
-# cv.imshow("5", diff)
-# diff = cv.cvtColor(diff, cv.COLOR_BGR2GRAY)
-# cv.imshow("6", diff)
-
-
-# Gauss filtering
-# size = int(height*0.005) + (int(height*0.005) - 1) % 2
-# print("SIZE :", size)
-# blur = cv.GaussianBlur(thresh, (size, size), 0)
-# cv.imshow("3.5", blur)
-
-# Morphology operation
-# kernel = cv.getStructuringElement(cv.MORPH_RECT, (3, 3))
-# thresh = cv.morphologyEx(blur, cv.MORPH_CLOSE, kernel, iterations=15)
-# cv.imshow("3.9", thresh)
-
-# Gauss filtering
-# size = int(height*0.014) + (int(height*0.014) - 1) % 2
-# print("SIZE :", size)
-# blur = cv.GaussianBlur(thresh, (3, 3), 0)
-# blur = thresh
-# cv.imshow("4", blur)
-
-
-# Threshold filtering
-# value, thresh = cv.threshold(blur, 10, 255,  cv.THRESH_OTSU | cv.THRESH_TOZERO)
-# print(value)
-# cv.imshow("5", thresh)
-#
-# # Get contours
-# cnts = cv.findContours(thresh, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-# cnts = cnts[1] if imutils.is_cv3() else cnts[0]
-# print(len(cnts))
-
-
-# def area(c):
-#     import cv2
-#     x, y, w, h = cv2.boundingRect(c)
-#     return w*h
-#
-#
-# # Sort by area
-# cnts.sort(key=lambda x: area(x))
-# cnts.reverse()
-# Draw rectangle the first iteration
-# blank = np.zeros([int(height), int(width), 3], np.uint8)
-# edgeThresh = 0.04
-# i = 0
-# for c in cnts:
-#     x, y, w, h = cv.boundingRect(c)
-#     # print(x, y, w, h)
-#     if w > edgeThresh * width and h > edgeThresh * height:
-#         i += 1
-#         x1 = x
-#         y1 = y
-#         x2 = x + w
-#         y2 = y + h
-#         cv.rectangle(blank, (x1, y1), (x2, y2), (0, 0, 255), 2)
-#
-# cv.imshow("6", blank)
-# blank = cv.cvtColor(blank, cv.COLOR_BGR2GRAY)
-# cnts = cv.findContours(blank, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-# cnts = cnts[1] if imutils.is_cv3() else cnts[0]
-# print(len(cnts))
-# for c in cnts:
-#     x, y, w, h = cv.boundingRect(c)
-#     if w > 0.08 * width and h > 0.08 * height:
-#         print("True ", x, y, x + w, y + h)
-#
-# print("I:{}".format(i))
-
-# numpy
-# image1f = np.fft.fft2(image1)
-# image1fs = np.fft.fftshift(image1f)
-# image1fsms = 20*np.log(np.abs(image1fs))
-# image1fsms = image1fsms.astype(np.int8)
-# cv.imshow('mat', image1fsms)
-# print(image1.shape)
-# print(image2.shape)
-#
-# # openCV
-# dft1 = cv.dft(np.float32(image1), flags=cv.DFT_COMPLEX_OUTPUT)
-# dft1_shift = np.fft.fftshift(dft1)
-# magnitude_spectrum = 20*np.log(cv.magnitude(dft1_shift[:, :, 0], dft1_shift[:, :, 1]))
-# plt.subplot(121), plt.imshow(image1, cmap = 'gray')
-# plt.title('Input Image'), plt.xticks([]), plt.yticks([])
-# plt.subplot(122), plt.imshow(magnitude_spectrum, cmap='gray')
-# plt.title('Magnitude Spectrum'), plt.xticks([]), plt.yticks([])
-# plt.show()
-# magnitude_spectrum = magnitude_spectrum.astype(np.int8)
-# cv.imshow('magnitude_spectrum', magnitude_spectrum)
-
-
-# [height, width, channels] = image2.shape
-# image3 = np.zeros((height, width, channels))
-#
-# image3 = cv.subtract(image1, image2)
-# cv.imshow('mat', image3)
 cv.waitKeyEx(0)
